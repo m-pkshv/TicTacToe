@@ -3,6 +3,7 @@
 using System;
 using System.Collections;
 using UnityEngine;
+using TicTacToe.AI;
 using TicTacToe.Game.Enums;
 using TicTacToe.Game.Models;
 using TicTacToe.Game.Presenters;
@@ -11,353 +12,403 @@ using TicTacToe.Utils;
 namespace TicTacToe.Core
 {
     /// <summary>
-    /// Центральный контроллер игры (Singleton).
-    /// Управляет состояниями игры, режимами и координирует все подсистемы.
+    /// Главный менеджер игры (Singleton).
+    /// Управляет состояниями игры, игровым циклом и координирует все подсистемы.
     /// </summary>
     public class GameManager : Singleton<GameManager>
     {
         /// <summary>
-        /// Состояния игрового автомата (State Machine).
+        /// Состояния игры (State Machine).
         /// </summary>
         public enum State
         {
-            /// <summary>Начальное состояние до инициализации.</summary>
             None,
-            /// <summary>Главное меню.</summary>
             MainMenu,
-            /// <summary>Выбор сложности AI.</summary>
             DifficultySelect,
-            /// <summary>Лобби сетевой игры.</summary>
             Lobby,
-            /// <summary>Ожидание подключения игрока.</summary>
             WaitingForPlayer,
-            /// <summary>Игра в процессе.</summary>
             Playing,
-            /// <summary>Игра завершена.</summary>
             GameOver,
-            /// <summary>Игра на паузе.</summary>
             Paused
         }
         
-        private const float AI_MOVE_DELAY = 0.5f;
+        private const float AI_THINK_DELAY_MIN = 0.3f;
+        private const float AI_THINK_DELAY_MAX = 0.8f;
+        private const int MATCHES_BEFORE_INTERSTITIAL = 3;
         
-        private GamePresenter _presenter;
-        private IGameView _currentView;
-        private State _previousState;
-        private Coroutine _aiMoveCoroutine;
-        
-        // TODO: Заменить на реальный IAIPlayer после создания AI системы
-        private object _aiPlayer;
-        
-        /// <summary>
-        /// Вызывается при изменении состояния игры.
-        /// </summary>
+        // События
+        /// <summary>Вызывается при смене состояния игры.</summary>
         public event Action<State> OnStateChanged;
         
-        /// <summary>
-        /// Вызывается при завершении игры.
-        /// </summary>
+        /// <summary>Вызывается при окончании игры.</summary>
         public event Action<GameResult> OnGameEnded;
         
-        /// <summary>
-        /// Вызывается при смене хода.
-        /// </summary>
+        /// <summary>Вызывается при смене хода.</summary>
         public event Action<CellState> OnTurnChanged;
         
-        /// <summary>
-        /// Вызывается при выполнении хода.
-        /// Параметры: индекс ячейки, игрок.
-        /// </summary>
+        /// <summary>Вызывается при совершении хода.</summary>
         public event Action<int, CellState> OnMoveMade;
         
-        /// <summary>
-        /// Текущее состояние игры.
-        /// </summary>
-        public State CurrentState { get; private set; }
+        // Свойства
+        /// <summary>Текущее состояние игры.</summary>
+        public State CurrentState { get; private set; } = State.None;
         
-        /// <summary>
-        /// Текущий режим игры.
-        /// </summary>
+        /// <summary>Текущий режим игры.</summary>
         public GameMode CurrentMode { get; private set; }
         
-        /// <summary>
-        /// Текущая сложность AI (актуально для режима VsAI).
-        /// </summary>
+        /// <summary>Текущая сложность ИИ.</summary>
         public AIDifficulty CurrentDifficulty { get; private set; }
         
-        /// <summary>
-        /// Текущий игрок (чей ход).
-        /// </summary>
-        public CellState CurrentTurn => _presenter?.CurrentPlayer ?? CellState.X;
+        /// <summary>Чей сейчас ход (X или O).</summary>
+        public CellState CurrentTurn { get; private set; } = CellState.X;
         
-        /// <summary>
-        /// Модель игрового поля.
-        /// </summary>
-        public BoardModel Board => _presenter?.Board;
+        /// <summary>Модель игрового поля.</summary>
+        public BoardModel Board { get; private set; }
         
-        /// <summary>
-        /// Презентер игры.
-        /// </summary>
-        public GamePresenter Presenter => _presenter;
+        /// <summary>Результат последней игры.</summary>
+        public GameResult LastGameResult { get; private set; } = GameResult.None;
         
-        /// <summary>
-        /// Активна ли игра.
-        /// </summary>
-        public bool IsGameActive => CurrentState == State.Playing;
+        /// <summary>Игрок за X (true) или за O (false) в режиме VsAI.</summary>
+        public bool PlayerIsX { get; private set; } = true;
         
-        /// <summary>
-        /// Символ игрока (в режиме VsAI).
-        /// </summary>
-        public CellState PlayerSymbol { get; private set; } = CellState.X;
+        /// <summary>Идёт ли ход ИИ.</summary>
+        public bool IsAIThinking { get; private set; }
         
-        /// <summary>
-        /// Символ AI (в режиме VsAI).
-        /// </summary>
-        public CellState AISymbol => PlayerSymbol == CellState.X ? CellState.O : CellState.X;
+        // Приватные поля
+        private IAIPlayer _aiPlayer;
+        private GamePresenter _presenter;
+        private Coroutine _aiThinkCoroutine;
+        private int _matchesPlayed;
+        private State _stateBeforePause;
         
         protected override void Awake()
         {
             base.Awake();
-            Initialize();
+            Board = new BoardModel();
+            ChangeState(State.MainMenu);
         }
         
         private void OnDestroy()
         {
-            Cleanup();
+            StopAIThinking();
         }
         
-        private void Initialize()
-        {
-            _presenter = new GamePresenter();
-            _presenter.OnTurnChanged += HandleTurnChanged;
-            _presenter.OnGameEnded += HandleGameEnded;
-            _presenter.OnMoveMade += HandleMoveMade;
-            
-            ChangeState(State.MainMenu);
-        }
+        // ========== Публичные методы ==========
         
-        private void Cleanup()
+        /// <summary>
+        /// Устанавливает Presenter для связи с UI.
+        /// </summary>
+        /// <param name="presenter">GamePresenter</param>
+        public void SetPresenter(GamePresenter presenter)
         {
-            if (_aiMoveCoroutine != null)
-            {
-                StopCoroutine(_aiMoveCoroutine);
-                _aiMoveCoroutine = null;
-            }
-            
-            if (_presenter != null)
-            {
-                _presenter.OnTurnChanged -= HandleTurnChanged;
-                _presenter.OnGameEnded -= HandleGameEnded;
-                _presenter.OnMoveMade -= HandleMoveMade;
-                _presenter.Dispose();
-                _presenter = null;
-            }
+            _presenter = presenter;
         }
         
         /// <summary>
-        /// Привязать View к игре.
+        /// Начинает игру против ИИ.
         /// </summary>
-        /// <param name="view">Реализация IGameView.</param>
-        public void SetView(IGameView view)
-        {
-            _currentView = view;
-            _presenter?.SetView(view);
-        }
-        
-        /// <summary>
-        /// Начать игру против AI.
-        /// </summary>
-        /// <param name="difficulty">Уровень сложности.</param>
-        /// <param name="playerSymbol">Символ игрока (X ходит первым).</param>
-        public void StartGameVsAI(AIDifficulty difficulty, CellState playerSymbol = CellState.X)
+        /// <param name="difficulty">Уровень сложности</param>
+        /// <param name="playerIsX">Игрок играет за X (первый ход)</param>
+        public void StartGameVsAI(AIDifficulty difficulty, bool playerIsX = true)
         {
             CurrentMode = GameMode.VsAI;
             CurrentDifficulty = difficulty;
-            PlayerSymbol = playerSymbol;
+            PlayerIsX = playerIsX;
             
-            // TODO: Создать AI через AIFactory
-            // _aiPlayer = AIFactory.Create(difficulty);
+            // Создаём ИИ через фабрику
+            _aiPlayer = AIFactory.Create(difficulty);
             
             StartGameInternal();
             
-            // Если AI ходит первым
-            if (PlayerSymbol == CellState.O)
+            // Если ИИ ходит первым
+            if (!playerIsX)
             {
-                _presenter.LockInput();
-                ScheduleAIMove();
+                HandleAITurn();
             }
         }
         
         /// <summary>
-        /// Начать локальную игру (два игрока на одном устройстве).
+        /// Начинает локальный мультиплеер (два игрока на одном устройстве).
         /// </summary>
         public void StartLocalMultiplayer()
         {
             CurrentMode = GameMode.LocalMultiplayer;
-            CurrentDifficulty = AIDifficulty.Easy; // Не используется
-            PlayerSymbol = CellState.X;
             _aiPlayer = null;
             
             StartGameInternal();
         }
         
         /// <summary>
-        /// Начать сетевую игру.
+        /// Начинает сетевую игру (заглушка — будет реализовано в Фазе 8).
         /// </summary>
-        public void StartNetworkMultiplayer()
+        public void StartNetworkGame()
         {
             CurrentMode = GameMode.NetworkMultiplayer;
+            _aiPlayer = null;
+            
+            // TODO: Фаза 8 — Network Multiplayer
             ChangeState(State.Lobby);
-            
-            // TODO: Инициализация сетевого менеджера
         }
         
         /// <summary>
-        /// Начать игру (общий метод из TDD).
+        /// Переводит игру в состояние выбора сложности.
         /// </summary>
-        /// <param name="mode">Режим игры.</param>
-        /// <param name="difficulty">Сложность AI (для режима VsAI).</param>
-        public void StartGame(GameMode mode, AIDifficulty difficulty = AIDifficulty.Easy)
-        {
-            switch (mode)
-            {
-                case GameMode.VsAI:
-                    StartGameVsAI(difficulty);
-                    break;
-                case GameMode.LocalMultiplayer:
-                    StartLocalMultiplayer();
-                    break;
-                case GameMode.NetworkMultiplayer:
-                    StartNetworkMultiplayer();
-                    break;
-            }
-        }
-        
-        /// <summary>
-        /// Выполнить ход игрока.
-        /// </summary>
-        /// <param name="cellIndex">Индекс ячейки (0-8).</param>
-        public void MakeMove(int cellIndex)
-        {
-            if (CurrentState != State.Playing)
-            {
-                return;
-            }
-            
-            // В режиме VsAI проверяем, что сейчас ход игрока
-            if (CurrentMode == GameMode.VsAI && CurrentTurn != PlayerSymbol)
-            {
-                return;
-            }
-            
-            bool success = _presenter.TryMakeMove(cellIndex);
-            
-            // После успешного хода игрока в режиме VsAI — ход AI
-            if (success && CurrentMode == GameMode.VsAI && CurrentState == State.Playing)
-            {
-                _presenter.LockInput();
-                ScheduleAIMove();
-            }
-        }
-        
-        /// <summary>
-        /// Перезапустить игру с теми же настройками.
-        /// </summary>
-        public void Restart()
-        {
-            if (_aiMoveCoroutine != null)
-            {
-                StopCoroutine(_aiMoveCoroutine);
-                _aiMoveCoroutine = null;
-            }
-            
-            switch (CurrentMode)
-            {
-                case GameMode.VsAI:
-                    StartGameVsAI(CurrentDifficulty, PlayerSymbol);
-                    break;
-                case GameMode.LocalMultiplayer:
-                    StartLocalMultiplayer();
-                    break;
-                case GameMode.NetworkMultiplayer:
-                    // TODO: Перезапуск сетевой игры
-                    StartGameInternal();
-                    break;
-            }
-        }
-        
-        /// <summary>
-        /// Вернуться в главное меню.
-        /// </summary>
-        public void QuitToMenu()
-        {
-            if (_aiMoveCoroutine != null)
-            {
-                StopCoroutine(_aiMoveCoroutine);
-                _aiMoveCoroutine = null;
-            }
-            
-            // TODO: Отключиться от сети если нужно
-            
-            ChangeState(State.MainMenu);
-        }
-        
-        /// <summary>
-        /// Поставить игру на паузу.
-        /// </summary>
-        public void Pause()
-        {
-            if (CurrentState != State.Playing)
-            {
-                return;
-            }
-            
-            _previousState = CurrentState;
-            ChangeState(State.Paused);
-            _presenter?.LockInput();
-        }
-        
-        /// <summary>
-        /// Продолжить игру после паузы.
-        /// </summary>
-        public void Resume()
-        {
-            if (CurrentState != State.Paused)
-            {
-                return;
-            }
-            
-            ChangeState(_previousState);
-            
-            // Разблокировать ввод только если сейчас ход игрока
-            if (CurrentMode != GameMode.VsAI || CurrentTurn == PlayerSymbol)
-            {
-                _presenter?.UnlockInput();
-            }
-        }
-        
-        /// <summary>
-        /// Перейти к выбору сложности.
-        /// </summary>
-        public void GoToDifficultySelect()
+        public void ShowDifficultySelect()
         {
             ChangeState(State.DifficultySelect);
         }
         
         /// <summary>
-        /// Перейти в лобби.
+        /// Совершает ход в указанную ячейку.
         /// </summary>
-        public void GoToLobby()
+        /// <param name="cellIndex">Индекс ячейки (0-8)</param>
+        /// <returns>true если ход успешен</returns>
+        public bool MakeMove(int cellIndex)
         {
-            ChangeState(State.Lobby);
+            if (CurrentState != State.Playing)
+            {
+                return false;
+            }
+            
+            // Блокируем ход во время "думания" ИИ
+            if (IsAIThinking)
+            {
+                return false;
+            }
+            
+            // В режиме VsAI игрок может ходить только своим символом
+            if (CurrentMode == GameMode.VsAI)
+            {
+                CellState playerSymbol = PlayerIsX ? CellState.X : CellState.O;
+                if (CurrentTurn != playerSymbol)
+                {
+                    return false;
+                }
+            }
+            
+            return ProcessMove(cellIndex);
         }
         
+        /// <summary>
+        /// Перезапускает игру с теми же настройками.
+        /// </summary>
+        public void Restart()
+        {
+            StopAIThinking();
+            
+            switch (CurrentMode)
+            {
+                case GameMode.VsAI:
+                    StartGameVsAI(CurrentDifficulty, PlayerIsX);
+                    break;
+                case GameMode.LocalMultiplayer:
+                    StartLocalMultiplayer();
+                    break;
+                case GameMode.NetworkMultiplayer:
+                    // TODO: Фаза 8
+                    StartLocalMultiplayer();
+                    break;
+            }
+        }
+        
+        /// <summary>
+        /// Выходит в главное меню.
+        /// </summary>
+        public void QuitToMenu()
+        {
+            StopAIThinking();
+            _aiPlayer = null;
+            ChangeState(State.MainMenu);
+        }
+        
+        /// <summary>
+        /// Ставит игру на паузу.
+        /// </summary>
+        public void Pause()
+        {
+            if (CurrentState == State.Playing)
+            {
+                _stateBeforePause = CurrentState;
+                ChangeState(State.Paused);
+            }
+        }
+        
+        /// <summary>
+        /// Снимает игру с паузы.
+        /// </summary>
+        public void Resume()
+        {
+            if (CurrentState == State.Paused)
+            {
+                ChangeState(_stateBeforePause);
+            }
+        }
+        
+        // ========== Приватные методы ==========
+        
+        /// <summary>
+        /// Внутренняя логика начала игры.
+        /// </summary>
         private void StartGameInternal()
         {
-            _presenter.StartGame(CellState.X);
+            Board.Reset();
+            CurrentTurn = CellState.X;
+            LastGameResult = GameResult.None;
+            IsAIThinking = false;
+            
             ChangeState(State.Playing);
+            OnTurnChanged?.Invoke(CurrentTurn);
         }
         
+        /// <summary>
+        /// Обрабатывает ход.
+        /// </summary>
+        /// <param name="cellIndex">Индекс ячейки</param>
+        /// <returns>true если ход успешен</returns>
+        private bool ProcessMove(int cellIndex)
+        {
+            if (!Board.MakeMove(cellIndex, CurrentTurn))
+            {
+                return false;
+            }
+            
+            OnMoveMade?.Invoke(cellIndex, CurrentTurn);
+            
+            // Проверяем окончание игры
+            GameResult result = Board.GetGameResult();
+            
+            if (result != GameResult.None)
+            {
+                EndGame(result);
+                return true;
+            }
+            
+            // Переключаем ход
+            SwitchTurn();
+            
+            // Если теперь ход ИИ
+            if (CurrentMode == GameMode.VsAI && IsAITurn())
+            {
+                HandleAITurn();
+            }
+            
+            return true;
+        }
+        
+        /// <summary>
+        /// Переключает ход на другого игрока.
+        /// </summary>
+        private void SwitchTurn()
+        {
+            CurrentTurn = CurrentTurn == CellState.X ? CellState.O : CellState.X;
+            OnTurnChanged?.Invoke(CurrentTurn);
+        }
+        
+        /// <summary>
+        /// Проверяет, ход ли сейчас ИИ.
+        /// </summary>
+        /// <returns>true если ход ИИ</returns>
+        private bool IsAITurn()
+        {
+            if (_aiPlayer == null)
+            {
+                return false;
+            }
+            
+            CellState aiSymbol = PlayerIsX ? CellState.O : CellState.X;
+            return CurrentTurn == aiSymbol;
+        }
+        
+        /// <summary>
+        /// Запускает ход ИИ с небольшой задержкой для реалистичности.
+        /// </summary>
+        private void HandleAITurn()
+        {
+            if (_aiPlayer == null || CurrentState != State.Playing)
+            {
+                return;
+            }
+            
+            StopAIThinking();
+            _aiThinkCoroutine = StartCoroutine(AIThinkCoroutine());
+        }
+        
+        /// <summary>
+        /// Корутина для имитации "размышления" ИИ.
+        /// </summary>
+        private IEnumerator AIThinkCoroutine()
+        {
+            IsAIThinking = true;
+            
+            // Случайная задержка для реалистичности
+            float delay = UnityEngine.Random.Range(AI_THINK_DELAY_MIN, AI_THINK_DELAY_MAX);
+            yield return new WaitForSeconds(delay);
+            
+            if (CurrentState != State.Playing)
+            {
+                IsAIThinking = false;
+                yield break;
+            }
+            
+            // Получаем символ ИИ
+            CellState aiSymbol = PlayerIsX ? CellState.O : CellState.X;
+            
+            // Запрашиваем ход у ИИ
+            int aiMove = _aiPlayer.GetMove(Board, aiSymbol);
+            
+            IsAIThinking = false;
+            
+            if (aiMove >= 0 && aiMove < BoardModel.TOTAL_CELLS)
+            {
+                ProcessMove(aiMove);
+            }
+            else
+            {
+                Debug.LogWarning($"[GameManager] AI returned invalid move: {aiMove}");
+            }
+        }
+        
+        /// <summary>
+        /// Останавливает корутину размышления ИИ.
+        /// </summary>
+        private void StopAIThinking()
+        {
+            if (_aiThinkCoroutine != null)
+            {
+                StopCoroutine(_aiThinkCoroutine);
+                _aiThinkCoroutine = null;
+            }
+            IsAIThinking = false;
+        }
+        
+        /// <summary>
+        /// Завершает игру с указанным результатом.
+        /// </summary>
+        /// <param name="result">Результат игры</param>
+        private void EndGame(GameResult result)
+        {
+            LastGameResult = result;
+            ChangeState(State.GameOver);
+            
+            _matchesPlayed++;
+            
+            // TODO: Фаза 5 — обновить статистику в SaveSystem
+            // SaveSystem.Instance?.UpdateStatistics(CurrentMode, result);
+            
+            // TODO: Фаза 7 — показать interstitial рекламу
+            // if (_matchesPlayed >= MATCHES_BEFORE_INTERSTITIAL)
+            // {
+            //     _matchesPlayed = 0;
+            //     AdsManager.Instance?.ShowInterstitial();
+            // }
+            
+            OnGameEnded?.Invoke(result);
+        }
+        
+        /// <summary>
+        /// Меняет состояние игры.
+        /// </summary>
+        /// <param name="newState">Новое состояние</param>
         private void ChangeState(State newState)
         {
             if (CurrentState == newState)
@@ -365,98 +416,12 @@ namespace TicTacToe.Core
                 return;
             }
             
-            State oldState = CurrentState;
+            State previousState = CurrentState;
             CurrentState = newState;
             
-            Debug.Log($"[GameManager] State changed: {oldState} -> {newState}");
+            Debug.Log($"[GameManager] State: {previousState} → {newState}");
             
             OnStateChanged?.Invoke(newState);
-        }
-        
-        private void HandleTurnChanged(CellState newTurn)
-        {
-            OnTurnChanged?.Invoke(newTurn);
-        }
-        
-        private void HandleGameEnded(GameResult result)
-        {
-            ChangeState(State.GameOver);
-            OnGameEnded?.Invoke(result);
-            
-            // TODO: Показать interstitial рекламу (каждые N игр)
-            // TODO: Обновить статистику
-        }
-        
-        private void HandleMoveMade(int cellIndex, CellState player)
-        {
-            OnMoveMade?.Invoke(cellIndex, player);
-        }
-        
-        private void ScheduleAIMove()
-        {
-            if (_aiMoveCoroutine != null)
-            {
-                StopCoroutine(_aiMoveCoroutine);
-            }
-            
-            _aiMoveCoroutine = StartCoroutine(AITurnCoroutine());
-        }
-        
-        private IEnumerator AITurnCoroutine()
-        {
-            _currentView?.ShowAIThinking(true);
-            
-            // Небольшая задержка для естественности
-            yield return new WaitForSeconds(AI_MOVE_DELAY);
-            
-            if (CurrentState != State.Playing)
-            {
-                _currentView?.ShowAIThinking(false);
-                yield break;
-            }
-            
-            // TODO: Получить ход от AI
-            // int aiMove = _aiPlayer.GetMove(Board, AISymbol);
-            
-            // Временная заглушка: случайный ход
-            int aiMove = GetRandomEmptyCell();
-            
-            if (aiMove >= 0)
-            {
-                _presenter.MakeMove(aiMove, AISymbol);
-            }
-            
-            _currentView?.ShowAIThinking(false);
-            
-            // Разблокировать ввод, если игра продолжается
-            if (CurrentState == State.Playing)
-            {
-                _presenter.UnlockInput();
-            }
-            
-            _aiMoveCoroutine = null;
-        }
-        
-        /// <summary>
-        /// Временный метод: получить случайную пустую ячейку.
-        /// Будет заменён на AI.GetMove() после создания AI системы.
-        /// </summary>
-        private int GetRandomEmptyCell()
-        {
-            if (Board == null)
-            {
-                return -1;
-            }
-            
-            var emptyCells = Board.GetEmptyCells();
-            
-            if (emptyCells.Count == 0)
-            {
-                return -1;
-            }
-            
-            int randomIndex = UnityEngine.Random.Range(0, emptyCells.Count);
-            return emptyCells[randomIndex];
         }
     }
 }
