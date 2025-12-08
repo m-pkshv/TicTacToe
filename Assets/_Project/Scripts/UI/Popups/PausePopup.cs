@@ -4,78 +4,62 @@ using System;
 using System.Collections;
 using UnityEngine;
 using UnityEngine.UI;
-using TMPro;
 using TicTacToe.Core;
+using TicTacToe.Save;
 using TicTacToe.Utils;
 
 namespace TicTacToe.UI.Popups
 {
     /// <summary>
-    /// Popup меню паузы
+    /// Popup меню паузы.
+    /// Отображает кнопки управления игрой и настройки звука.
     /// </summary>
     public class PausePopup : BaseScreen
     {
-        [Header("Title")]
-        [SerializeField] private TextMeshProUGUI _titleText;
-        
         [Header("Buttons")]
         [SerializeField] private Button _resumeButton;
         [SerializeField] private Button _restartButton;
         [SerializeField] private Button _settingsButton;
         [SerializeField] private Button _mainMenuButton;
+        [SerializeField] private Button _backgroundButton;
         
-        [Header("Button Texts")]
-        [SerializeField] private TextMeshProUGUI _resumeButtonText;
-        [SerializeField] private TextMeshProUGUI _restartButtonText;
-        [SerializeField] private TextMeshProUGUI _settingsButtonText;
-        [SerializeField] private TextMeshProUGUI _mainMenuButtonText;
-        
-        [Header("Sound Toggle")]
+        [Header("Sound Toggles")]
         [SerializeField] private Toggle _soundToggle;
         [SerializeField] private Toggle _musicToggle;
+        
+        [Header("Sound Icons")]
         [SerializeField] private Image _soundIconOn;
         [SerializeField] private Image _soundIconOff;
         [SerializeField] private Image _musicIconOn;
         [SerializeField] private Image _musicIconOff;
         
         [Header("Animation")]
-        [SerializeField] private RectTransform _contentContainer;
-        [SerializeField] private float _appearAnimationDuration = 0.3f;
+        [SerializeField] private CanvasGroup _panelCanvasGroup;
+        [SerializeField] private RectTransform _panelTransform;
+        [SerializeField] private float _animationDuration = 0.25f;
         
-        [Header("Background")]
-        [SerializeField] private Image _backgroundOverlay;
-        [SerializeField] private Button _backgroundButton;
-        
-        [Header("Canvas Group")]
-        [SerializeField] private CanvasGroup _popupCanvasGroup;
+        // События
+        public event Action OnResumeClicked;
+        public event Action OnRestartClicked;
+        public event Action OnSettingsClicked;
+        public event Action OnMainMenuClicked;
         
         private Coroutine _animationCoroutine;
-        
-        /// <summary>
-        /// Событие продолжения игры
-        /// </summary>
-        public event Action OnResumeClicked;
-        
-        /// <summary>
-        /// Событие перезапуска
-        /// </summary>
-        public event Action OnRestartClicked;
-        
-        /// <summary>
-        /// Событие настроек
-        /// </summary>
-        public event Action OnSettingsClicked;
-        
-        /// <summary>
-        /// Событие главного меню
-        /// </summary>
-        public event Action OnMainMenuClicked;
         
         protected override void Awake()
         {
             base.Awake();
-            
-            // Подписываемся на кнопки
+            SetupButtons();
+            SetupToggles();
+        }
+        
+        private void OnDestroy()
+        {
+            RemoveListeners();
+        }
+        
+        private void SetupButtons()
+        {
             if (_resumeButton != null)
             {
                 _resumeButton.onClick.AddListener(HandleResumeClick);
@@ -100,8 +84,10 @@ namespace TicTacToe.UI.Popups
             {
                 _backgroundButton.onClick.AddListener(HandleResumeClick);
             }
-            
-            // Подписываемся на toggles
+        }
+        
+        private void SetupToggles()
+        {
             if (_soundToggle != null)
             {
                 _soundToggle.onValueChanged.AddListener(HandleSoundToggle);
@@ -113,10 +99,8 @@ namespace TicTacToe.UI.Popups
             }
         }
         
-        protected override void OnDestroy()
+        private void RemoveListeners()
         {
-            base.OnDestroy();
-            
             if (_resumeButton != null)
             {
                 _resumeButton.onClick.RemoveListener(HandleResumeClick);
@@ -151,11 +135,6 @@ namespace TicTacToe.UI.Popups
             {
                 _musicToggle.onValueChanged.RemoveListener(HandleMusicToggle);
             }
-            
-            if (_animationCoroutine != null)
-            {
-                StopCoroutine(_animationCoroutine);
-            }
         }
         
         /// <summary>
@@ -165,7 +144,7 @@ namespace TicTacToe.UI.Popups
         {
             base.OnScreenShow();
             
-            // Обновляем состояние toggles
+            // Обновляем состояние toggles из SaveSystem
             UpdateSoundToggles();
             
             // Запускаем анимацию появления
@@ -190,17 +169,19 @@ namespace TicTacToe.UI.Popups
             }
         }
         
+        /// <summary>
+        /// Обновляет состояние toggles из SaveSystem
+        /// </summary>
         private void UpdateSoundToggles()
         {
-            // TODO: Получить состояние из AudioManager (Фаза 9)
-            // Пока используем PlayerPrefs
+            // Получаем настройки из SaveSystem
+            var (musicEnabled, sfxEnabled, _, _) = SaveSystem.Instance?.GetSoundSettings() 
+                ?? (true, true, 0.8f, 1.0f);
             
-            bool soundEnabled = PlayerPrefs.GetInt("SoundEnabled", 1) == 1;
-            bool musicEnabled = PlayerPrefs.GetInt("MusicEnabled", 1) == 1;
-            
+            // Устанавливаем значения без вызова события
             if (_soundToggle != null)
             {
-                _soundToggle.SetIsOnWithoutNotify(soundEnabled);
+                _soundToggle.SetIsOnWithoutNotify(sfxEnabled);
             }
             
             if (_musicToggle != null)
@@ -208,10 +189,14 @@ namespace TicTacToe.UI.Popups
                 _musicToggle.SetIsOnWithoutNotify(musicEnabled);
             }
             
-            UpdateSoundIcons(soundEnabled);
+            // Обновляем иконки
+            UpdateSoundIcons(sfxEnabled);
             UpdateMusicIcons(musicEnabled);
         }
         
+        /// <summary>
+        /// Обновляет иконки звуковых эффектов
+        /// </summary>
         private void UpdateSoundIcons(bool enabled)
         {
             if (_soundIconOn != null)
@@ -225,6 +210,9 @@ namespace TicTacToe.UI.Popups
             }
         }
         
+        /// <summary>
+        /// Обновляет иконки музыки
+        /// </summary>
         private void UpdateMusicIcons(bool enabled)
         {
             if (_musicIconOn != null)
@@ -238,8 +226,11 @@ namespace TicTacToe.UI.Popups
             }
         }
         
+        // ==================== Button Handlers ====================
+        
         private void HandleResumeClick()
         {
+            PlayButtonSound();
             OnResumeClicked?.Invoke();
             
             // Скрываем popup
@@ -251,6 +242,7 @@ namespace TicTacToe.UI.Popups
         
         private void HandleRestartClick()
         {
+            PlayButtonSound();
             OnRestartClicked?.Invoke();
             
             // Скрываем popup
@@ -262,13 +254,15 @@ namespace TicTacToe.UI.Popups
         
         private void HandleSettingsClick()
         {
+            PlayButtonSound();
             OnSettingsClicked?.Invoke();
             
-            // TODO: Открыть настройки (Фаза 9)
+            // TODO: Открыть полноценные настройки
         }
         
         private void HandleMainMenuClick()
         {
+            PlayButtonSound();
             OnMainMenuClicked?.Invoke();
             
             // Скрываем popup
@@ -279,95 +273,118 @@ namespace TicTacToe.UI.Popups
             UIManager.Instance?.ShowScreen(Constants.Screens.MAIN_MENU);
         }
         
+        // ==================== Toggle Handlers ====================
+        
+        /// <summary>
+        /// Обработчик переключения звуковых эффектов
+        /// </summary>
         private void HandleSoundToggle(bool enabled)
         {
-            PlayerPrefs.SetInt("SoundEnabled", enabled ? 1 : 0);
-            PlayerPrefs.Save();
+            // Сохраняем в SaveSystem
+            var saveSystem = SaveSystem.Instance;
+            if (saveSystem != null)
+            {
+                var (musicEnabled, _, musicVol, sfxVol) = saveSystem.GetSoundSettings();
+                saveSystem.SetSoundSettings(musicEnabled, enabled, musicVol, sfxVol);
+            }
             
+            // Обновляем иконки
             UpdateSoundIcons(enabled);
             
-            // TODO: Применить к AudioManager (Фаза 9)
+            // Применяем к AudioManager
+            // TODO: Фаза 9
+            // AudioManager.Instance?.SetSfxEnabled(enabled);
+            
+            Debug.Log($"[PausePopup] Sound effects: {(enabled ? "ON" : "OFF")}");
         }
         
+        /// <summary>
+        /// Обработчик переключения музыки
+        /// </summary>
         private void HandleMusicToggle(bool enabled)
         {
-            PlayerPrefs.SetInt("MusicEnabled", enabled ? 1 : 0);
-            PlayerPrefs.Save();
+            // Сохраняем в SaveSystem
+            var saveSystem = SaveSystem.Instance;
+            if (saveSystem != null)
+            {
+                var (_, sfxEnabled, musicVol, sfxVol) = saveSystem.GetSoundSettings();
+                saveSystem.SetSoundSettings(enabled, sfxEnabled, musicVol, sfxVol);
+            }
             
+            // Обновляем иконки
             UpdateMusicIcons(enabled);
             
-            // TODO: Применить к AudioManager (Фаза 9)
+            // Применяем к AudioManager
+            // TODO: Фаза 9
+            // AudioManager.Instance?.SetMusicEnabled(enabled);
+            
+            Debug.Log($"[PausePopup] Music: {(enabled ? "ON" : "OFF")}");
         }
         
+        // ==================== Animation ====================
+        
+        /// <summary>
+        /// Анимация появления popup-а
+        /// </summary>
         private IEnumerator AnimateAppear()
         {
-            // Начальное состояние
-            if (_contentContainer != null)
+            if (_panelCanvasGroup != null)
             {
-                _contentContainer.localScale = Vector3.one * 0.8f;
+                _panelCanvasGroup.alpha = 0f;
             }
             
-            if (_backgroundOverlay != null)
+            if (_panelTransform != null)
             {
-                Color bgColor = _backgroundOverlay.color;
-                bgColor.a = 0f;
-                _backgroundOverlay.color = bgColor;
-            }
-            
-            if (_popupCanvasGroup != null)
-            {
-                _popupCanvasGroup.alpha = 0f;
+                _panelTransform.localScale = Vector3.one * 0.8f;
             }
             
             float elapsed = 0f;
             
-            while (elapsed < _appearAnimationDuration)
+            while (elapsed < _animationDuration)
             {
-                elapsed += Time.unscaledDeltaTime; // unscaled для работы на паузе
-                float t = elapsed / _appearAnimationDuration;
-                float easedT = EaseOutQuad(t);
+                elapsed += Time.unscaledDeltaTime; // Используем unscaled для работы на паузе
+                float t = elapsed / _animationDuration;
                 
-                if (_backgroundOverlay != null)
+                // Ease out back
+                float overshoot = 1.5f;
+                t = 1f + (overshoot + 1f) * Mathf.Pow(t - 1f, 3f) + overshoot * Mathf.Pow(t - 1f, 2f);
+                t = Mathf.Clamp01(t);
+                
+                if (_panelCanvasGroup != null)
                 {
-                    Color bgColor = _backgroundOverlay.color;
-                    bgColor.a = Mathf.Lerp(0f, 0.7f, easedT);
-                    _backgroundOverlay.color = bgColor;
+                    _panelCanvasGroup.alpha = t;
                 }
                 
-                if (_contentContainer != null)
+                if (_panelTransform != null)
                 {
-                    float scale = Mathf.Lerp(0.8f, 1f, easedT);
-                    _contentContainer.localScale = Vector3.one * scale;
-                }
-                
-                if (_popupCanvasGroup != null)
-                {
-                    _popupCanvasGroup.alpha = easedT;
+                    _panelTransform.localScale = Vector3.Lerp(Vector3.one * 0.8f, Vector3.one, t);
                 }
                 
                 yield return null;
             }
             
-            // Финальное состояние
-            if (_contentContainer != null)
+            if (_panelCanvasGroup != null)
             {
-                _contentContainer.localScale = Vector3.one;
+                _panelCanvasGroup.alpha = 1f;
             }
             
-            if (_popupCanvasGroup != null)
+            if (_panelTransform != null)
             {
-                _popupCanvasGroup.alpha = 1f;
+                _panelTransform.localScale = Vector3.one;
             }
             
             _animationCoroutine = null;
         }
         
+        // ==================== Helpers ====================
+        
         /// <summary>
-        /// Ease Out Quad функция
+        /// Воспроизводит звук нажатия кнопки
         /// </summary>
-        private float EaseOutQuad(float t)
+        private void PlayButtonSound()
         {
-            return 1f - (1f - t) * (1f - t);
+            // TODO: Фаза 9 — AudioManager
+            // AudioManager.Instance?.PlaySfx(SoundType.ButtonClick);
         }
     }
 }
