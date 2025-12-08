@@ -3,318 +3,342 @@
 namespace TicTacToe.Utils
 {
     /// <summary>
-    /// Глобальные константы проекта.
-    /// Содержит все магические числа, строки и настройки.
+    /// Глобальные константы проекта
     /// </summary>
     public static class Constants
     {
-        // ==================== ИГРОВОЕ ПОЛЕ ====================
-        
-        /// <summary>Размер игрового поля (3x3)</summary>
-        public const int BOARD_SIZE = 3;
-        
-        /// <summary>Общее количество клеток</summary>
-        public const int TOTAL_CELLS = BOARD_SIZE * BOARD_SIZE;
-        
-        // ==================== ИГРОВЫЕ НАСТРОЙКИ ====================
-        
-        /// <summary>Минимальная задержка хода AI (секунды)</summary>
-        public const float AI_MIN_DELAY = 0.3f;
-        
-        /// <summary>Максимальная задержка хода AI (секунды)</summary>
-        public const float AI_MAX_DELAY = 0.8f;
-        
-        /// <summary>Таймаут хода в сетевой игре (секунды)</summary>
-        public const float NETWORK_TURN_TIMEOUT = 30f;
-        
-        /// <summary>Таймаут переподключения (секунды)</summary>
-        public const float NETWORK_RECONNECT_TIMEOUT = 30f;
-        
-        // ==================== СЕТЬ ====================
-        
-        /// <summary>Порт для LAN Discovery (UDP Broadcast)</summary>
-        public const int LAN_DISCOVERY_PORT = 47777;
-        
-        /// <summary>Интервал поиска игр в LAN (секунды)</summary>
-        public const float LAN_DISCOVERY_INTERVAL = 2f;
-        
-        /// <summary>Максимальное количество игроков</summary>
-        public const int MAX_PLAYERS = 2;
-        
-        // ==================== UI / АНИМАЦИИ ====================
-        
-        /// <summary>Длительность анимации перехода между экранами</summary>
-        public const float SCREEN_TRANSITION_DURATION = 0.3f;
-        
-        /// <summary>Длительность анимации появления символа</summary>
-        public const float SYMBOL_APPEAR_DURATION = 0.2f;
-        
-        /// <summary>Длительность анимации линии победы</summary>
-        public const float WIN_LINE_DURATION = 0.5f;
-        
-        /// <summary>Задержка перед показом результата</summary>
-        public const float RESULT_DELAY = 0.8f;
-        
-        // ==================== РЕКЛАМА ====================
-        
-        /// <summary>Частота показа Interstitial (каждые N матчей)</summary>
-        public const int INTERSTITIAL_FREQUENCY = 3;
-        
-        /// <summary>Минимальный интервал между Interstitial (секунды)</summary>
-        public const float INTERSTITIAL_MIN_INTERVAL = 60f;
-        
-        /// <summary>Максимум Interstitial за сессию</summary>
-        public const int MAX_INTERSTITIALS_PER_SESSION = 5;
-        
-        /// <summary>Высота баннера по умолчанию (dp)</summary>
-        public const float DEFAULT_BANNER_HEIGHT = 50f;
-        
-        // ==================== СОХРАНЕНИЯ ====================
-        
-        /// <summary>Ключ для PlayerPrefs - данные сохранения</summary>
-        public const string SAVE_KEY = "TicTacToe_SaveData";
-        
-        /// <summary>Ключ для PlayerPrefs - настройки</summary>
-        public const string SETTINGS_KEY = "TicTacToe_Settings";
-        
-        /// <summary>Версия формата сохранения</summary>
-        public const int SAVE_VERSION = 1;
-        
-        // ==================== SCREEN IDS ====================
+        /// <summary>
+        /// Константы игрового поля
+        /// </summary>
+        public static class Board
+        {
+            /// <summary>
+            /// Размер поля (3x3)
+            /// </summary>
+            public const int SIZE = 3;
+            
+            /// <summary>
+            /// Общее количество ячеек
+            /// </summary>
+            public const int CELL_COUNT = SIZE * SIZE;
+            
+            /// <summary>
+            /// Индекс центральной ячейки
+            /// </summary>
+            public const int CENTER_INDEX = 4;
+            
+            /// <summary>
+            /// Индексы угловых ячеек
+            /// </summary>
+            public static readonly int[] CORNER_INDICES = { 0, 2, 6, 8 };
+            
+            /// <summary>
+            /// Индексы боковых ячеек
+            /// </summary>
+            public static readonly int[] EDGE_INDICES = { 1, 3, 5, 7 };
+        }
         
         /// <summary>
-        /// Идентификаторы экранов для навигации в UIManager.
-        /// Использовать вместо строковых литералов.
+        /// Идентификаторы экранов
         /// </summary>
         public static class Screens
         {
-            /// <summary>Главное меню</summary>
             public const string MAIN_MENU = "MainMenu";
-            
-            /// <summary>Выбор сложности AI</summary>
             public const string DIFFICULTY = "Difficulty";
-            
-            /// <summary>Игровой экран</summary>
             public const string GAME = "Game";
-            
-            /// <summary>Экран результатов (может быть popup)</summary>
-            public const string RESULT = "Result";
-            
-            /// <summary>Лобби сетевой игры</summary>
-            public const string LOBBY = "Lobby";
-            
-            /// <summary>Создание сетевой игры (Host)</summary>
-            public const string HOST = "Host";
-            
-            /// <summary>Присоединение к игре (Join)</summary>
-            public const string JOIN = "Join";
-            
-            /// <summary>Магазин тем</summary>
-            public const string SHOP = "Shop";
-            
-            /// <summary>Настройки</summary>
             public const string SETTINGS = "Settings";
-            
-            /// <summary>Статистика игрока</summary>
+            public const string SHOP = "Shop";
+            public const string LOBBY = "Lobby";
             public const string STATISTICS = "Statistics";
         }
         
-        // ==================== POPUP IDS ====================
-        
         /// <summary>
-        /// Идентификаторы popup-ов для UIManager.
+        /// Идентификаторы popup-ов
         /// </summary>
         public static class Popups
         {
-            /// <summary>Пауза</summary>
-            public const string PAUSE = "PausePopup";
-            
-            /// <summary>Результат игры</summary>
-            public const string RESULT = "ResultPopup";
-            
-            /// <summary>Подтверждение покупки</summary>
-            public const string PURCHASE = "PurchasePopup";
-            
-            /// <summary>Ошибка</summary>
-            public const string ERROR = "ErrorPopup";
-            
-            /// <summary>Подтверждение действия</summary>
-            public const string CONFIRM = "ConfirmPopup";
-            
-            /// <summary>Загрузка</summary>
-            public const string LOADING = "LoadingPopup";
-            
-            /// <summary>Переподключение к сети</summary>
-            public const string RECONNECT = "ReconnectPopup";
+            public const string RESULT = "Result";
+            public const string PAUSE = "Pause";
+            public const string CONFIRM = "Confirm";
+            public const string LOADING = "Loading";
+            public const string ERROR = "Error";
+            public const string PURCHASE = "Purchase";
+            public const string REWARD = "Reward";
         }
         
-        // ==================== ANIMATION PARAMETERS ====================
-        
         /// <summary>
-        /// Имена параметров для Animator.
-        /// Использовать вместо строковых литералов.
+        /// Настройки анимаций
         /// </summary>
-        public static class AnimParams
+        public static class Animation
         {
-            /// <summary>Trigger для появления</summary>
-            public const string SHOW = "Show";
+            /// <summary>
+            /// Длительность fade анимации экранов (сек)
+            /// </summary>
+            public const float SCREEN_FADE_DURATION = 0.3f;
             
-            /// <summary>Trigger для скрытия</summary>
-            public const string HIDE = "Hide";
+            /// <summary>
+            /// Длительность анимации появления символа (сек)
+            /// </summary>
+            public const float SYMBOL_APPEAR_DURATION = 0.2f;
             
-            /// <summary>Trigger для выигрыша</summary>
-            public const string WIN = "Win";
+            /// <summary>
+            /// Длительность анимации подсветки победной линии (сек)
+            /// </summary>
+            public const float WIN_LINE_DURATION = 0.5f;
             
-            /// <summary>Bool для выделения</summary>
-            public const string HIGHLIGHTED = "Highlighted";
+            /// <summary>
+            /// Длительность появления popup (сек)
+            /// </summary>
+            public const float POPUP_APPEAR_DURATION = 0.25f;
             
-            /// <summary>Bool для интерактивности</summary>
-            public const string INTERACTABLE = "Interactable";
+            /// <summary>
+            /// Длительность анимации кнопки при нажатии (сек)
+            /// </summary>
+            public const float BUTTON_PRESS_DURATION = 0.1f;
         }
         
-        // ==================== AUDIO ====================
-        
         /// <summary>
-        /// Идентификаторы звуков для AudioManager.
+        /// Константы AI
         /// </summary>
-        public static class Sounds
+        public static class AI
         {
-            /// <summary>Звук постановки X</summary>
-            public const string PLACE_X = "place_x";
+            /// <summary>
+            /// Задержка перед ходом AI (сек) — минимум
+            /// </summary>
+            public const float MOVE_DELAY_MIN = 0.3f;
             
-            /// <summary>Звук постановки O</summary>
-            public const string PLACE_O = "place_o";
+            /// <summary>
+            /// Задержка перед ходом AI (сек) — максимум
+            /// </summary>
+            public const float MOVE_DELAY_MAX = 0.8f;
             
-            /// <summary>Звук победы</summary>
-            public const string WIN = "win";
+            /// <summary>
+            /// Вероятность умного хода для Medium AI (0-1)
+            /// </summary>
+            public const float MEDIUM_SMART_CHANCE = 0.7f;
             
-            /// <summary>Звук поражения</summary>
-            public const string LOSE = "lose";
+            /// <summary>
+            /// Максимальная глубина поиска Minimax
+            /// </summary>
+            public const int MINIMAX_MAX_DEPTH = 9;
             
-            /// <summary>Звук ничьей</summary>
-            public const string DRAW = "draw";
-            
-            /// <summary>Звук нажатия кнопки</summary>
-            public const string BUTTON_CLICK = "button_click";
-            
-            /// <summary>Звук ошибки</summary>
-            public const string ERROR = "error";
+            /// <summary>
+            /// Количество уровней сложности
+            /// </summary>
+            public const int DIFFICULTY_COUNT = 3;
         }
         
-        // ==================== THEMES ====================
+        /// <summary>
+        /// Константы сети
+        /// </summary>
+        public static class Network
+        {
+            /// <summary>
+            /// Порт для UDP broadcast (LAN discovery)
+            /// </summary>
+            public const int DISCOVERY_PORT = 47777;
+            
+            /// <summary>
+            /// Порт для игрового сервера
+            /// </summary>
+            public const int GAME_PORT = 47778;
+            
+            /// <summary>
+            /// Интервал broadcast сообщений (сек)
+            /// </summary>
+            public const float BROADCAST_INTERVAL = 1.0f;
+            
+            /// <summary>
+            /// Таймаут поиска серверов (сек)
+            /// </summary>
+            public const float DISCOVERY_TIMEOUT = 5.0f;
+            
+            /// <summary>
+            /// Таймаут ожидания хода противника (сек)
+            /// </summary>
+            public const float MOVE_TIMEOUT = 30.0f;
+            
+            /// <summary>
+            /// Время ожидания реконнекта (сек)
+            /// </summary>
+            public const float RECONNECT_TIMEOUT = 30.0f;
+            
+            /// <summary>
+            /// Максимальное количество попыток реконнекта
+            /// </summary>
+            public const int MAX_RECONNECT_ATTEMPTS = 3;
+        }
         
         /// <summary>
-        /// Идентификаторы тем оформления.
+        /// Константы рекламы
+        /// </summary>
+        public static class Ads
+        {
+            /// <summary>
+            /// Количество матчей между показами interstitial
+            /// </summary>
+            public const int MATCHES_BETWEEN_INTERSTITIAL = 3;
+            
+            /// <summary>
+            /// Минимальный интервал между interstitial (сек)
+            /// </summary>
+            public const int MIN_INTERSTITIAL_INTERVAL = 60;
+            
+            /// <summary>
+            /// Задержка перед первым показом рекламы (матчей)
+            /// </summary>
+            public const int FIRST_AD_DELAY_MATCHES = 2;
+            
+            /// <summary>
+            /// Высота баннера по умолчанию (dp)
+            /// </summary>
+            public const float DEFAULT_BANNER_HEIGHT = 50f;
+            
+            /// <summary>
+            /// Высота баннера для планшетов (dp)
+            /// </summary>
+            public const float TABLET_BANNER_HEIGHT = 90f;
+        }
+        
+        /// <summary>
+        /// Константы системы сохранений
+        /// </summary>
+        public static class Save
+        {
+            /// <summary>
+            /// Имя файла сохранения
+            /// </summary>
+            public const string FILE_NAME = "tictactoe_save.json";
+            
+            /// <summary>
+            /// Имя файла резервной копии
+            /// </summary>
+            public const string BACKUP_FILE_NAME = "tictactoe_save_backup.json";
+            
+            /// <summary>
+            /// Ключ для PlayerPrefs (WebGL)
+            /// </summary>
+            public const string PLAYER_PREFS_KEY = "TicTacToe_SaveData";
+            
+            /// <summary>
+            /// Ключ для облачного сохранения
+            /// </summary>
+            public const string CLOUD_KEY = "player_save";
+            
+            /// <summary>
+            /// Интервал автосохранения (сек)
+            /// </summary>
+            public const float AUTO_SAVE_INTERVAL = 30f;
+            
+            /// <summary>
+            /// Максимальное количество попыток облачного сохранения
+            /// </summary>
+            public const int MAX_CLOUD_RETRY_ATTEMPTS = 3;
+            
+            /// <summary>
+            /// Задержка между попытками облачного сохранения (сек)
+            /// </summary>
+            public const float CLOUD_RETRY_DELAY = 1f;
+        }
+        
+        /// <summary>
+        /// Идентификаторы тем оформления
         /// </summary>
         public static class Themes
         {
-            /// <summary>Классическая тема (бесплатная)</summary>
             public const string CLASSIC = "theme_classic";
-            
-            /// <summary>Неоновая тема</summary>
             public const string NEON = "theme_neon";
-            
-            /// <summary>Природа</summary>
             public const string NATURE = "theme_nature";
-            
-            /// <summary>Минимализм</summary>
             public const string MINIMAL = "theme_minimal";
-            
-            /// <summary>Космос</summary>
             public const string SPACE = "theme_space";
-            
-            /// <summary>Киберпанк</summary>
             public const string CYBERPUNK = "theme_cyberpunk";
-            
-            /// <summary>Ретро</summary>
             public const string RETRO = "theme_retro";
+            
+            /// <summary>
+            /// Тема по умолчанию (бесплатная)
+            /// </summary>
+            public const string DEFAULT = CLASSIC;
         }
         
-        // ==================== IAP PRODUCT IDS ====================
-        
         /// <summary>
-        /// Идентификаторы IAP продуктов.
-        /// Должны совпадать с ID в Google Play Console / App Store Connect.
+        /// Идентификаторы IAP продуктов
         /// </summary>
-        public static class IAPProducts
+        public static class Products
         {
-            /// <summary>Отключение рекламы</summary>
-            public const string REMOVE_ADS = "com.tictactoe.remove_ads";
-            
-            /// <summary>Неоновая тема</summary>
-            public const string THEME_NEON = "com.tictactoe.theme_neon";
-            
-            /// <summary>Тема Nature</summary>
-            public const string THEME_NATURE = "com.tictactoe.theme_nature";
-            
-            /// <summary>Тема Minimal</summary>
-            public const string THEME_MINIMAL = "com.tictactoe.theme_minimal";
-            
-            /// <summary>Тема Space</summary>
-            public const string THEME_SPACE = "com.tictactoe.theme_space";
-            
-            /// <summary>Тема Cyberpunk</summary>
-            public const string THEME_CYBERPUNK = "com.tictactoe.theme_cyberpunk";
-            
-            /// <summary>Тема Retro</summary>
-            public const string THEME_RETRO = "com.tictactoe.theme_retro";
-            
-            /// <summary>Набор всех тем со скидкой</summary>
-            public const string ALL_THEMES_BUNDLE = "com.tictactoe.all_themes";
+            public const string REMOVE_ADS = "com.yourcompany.tictactoe.removeads";
+            public const string THEME_NEON = "com.yourcompany.tictactoe.theme_neon";
+            public const string THEME_NATURE = "com.yourcompany.tictactoe.theme_nature";
+            public const string THEME_MINIMAL = "com.yourcompany.tictactoe.theme_minimal";
+            public const string THEME_SPACE = "com.yourcompany.tictactoe.theme_space";
+            public const string THEME_CYBERPUNK = "com.yourcompany.tictactoe.theme_cyberpunk";
+            public const string THEME_RETRO = "com.yourcompany.tictactoe.theme_retro";
+            public const string THEME_BUNDLE = "com.yourcompany.tictactoe.theme_bundle";
         }
         
-        // ==================== ANALYTICS EVENTS ====================
-        
         /// <summary>
-        /// Названия событий аналитики.
+        /// Константы аудио
         /// </summary>
-        public static class AnalyticsEvents
+        public static class Audio
         {
-            /// <summary>Игра начата</summary>
-            public const string GAME_START = "game_start";
+            /// <summary>
+            /// Громкость музыки по умолчанию (0-1)
+            /// </summary>
+            public const float DEFAULT_MUSIC_VOLUME = 0.8f;
             
-            /// <summary>Игра завершена</summary>
-            public const string GAME_END = "game_end";
+            /// <summary>
+            /// Громкость звуков по умолчанию (0-1)
+            /// </summary>
+            public const float DEFAULT_SFX_VOLUME = 1.0f;
             
-            /// <summary>Покупка совершена</summary>
-            public const string PURCHASE = "purchase";
-            
-            /// <summary>Реклама показана</summary>
-            public const string AD_SHOWN = "ad_shown";
-            
-            /// <summary>Тема изменена</summary>
-            public const string THEME_CHANGED = "theme_changed";
-            
-            /// <summary>Экран открыт</summary>
-            public const string SCREEN_VIEW = "screen_view";
+            /// <summary>
+            /// Длительность fade музыки (сек)
+            /// </summary>
+            public const float MUSIC_FADE_DURATION = 0.5f;
         }
         
-        // ==================== LAYER MASKS ====================
+        /// <summary>
+        /// Константы аналитики
+        /// </summary>
+        public static class Analytics
+        {
+            public const string EVENT_GAME_START = "game_start";
+            public const string EVENT_GAME_END = "game_end";
+            public const string EVENT_AD_SHOWN = "ad_shown";
+            public const string EVENT_AD_CLICKED = "ad_clicked";
+            public const string EVENT_PURCHASE = "purchase";
+            public const string EVENT_THEME_SELECTED = "theme_selected";
+            public const string EVENT_DIFFICULTY_SELECTED = "difficulty_selected";
+            
+            public const string PARAM_GAME_MODE = "game_mode";
+            public const string PARAM_DIFFICULTY = "difficulty";
+            public const string PARAM_RESULT = "result";
+            public const string PARAM_DURATION = "duration";
+            public const string PARAM_AD_TYPE = "ad_type";
+            public const string PARAM_PRODUCT_ID = "product_id";
+            public const string PARAM_THEME_ID = "theme_id";
+        }
         
         /// <summary>
-        /// Имена слоёв для LayerMask.
+        /// Слои сортировки UI
         /// </summary>
-        public static class Layers
+        public static class SortingLayers
         {
-            /// <summary>Слой UI</summary>
+            public const string BACKGROUND = "Background";
+            public const string DEFAULT = "Default";
+            public const string FOREGROUND = "Foreground";
             public const string UI = "UI";
-            
-            /// <summary>Слой игровых объектов</summary>
-            public const string GAME = "Game";
+            public const string POPUP = "Popup";
+            public const string OVERLAY = "Overlay";
         }
         
-        // ==================== TAGS ====================
-        
         /// <summary>
-        /// Теги объектов.
+        /// Теги игровых объектов
         /// </summary>
         public static class Tags
         {
-            /// <summary>Тег игрового поля</summary>
-            public const string BOARD = "Board";
-            
-            /// <summary>Тег клетки</summary>
-            public const string CELL = "Cell";
+            public const string GAME_MANAGER = "GameManager";
+            public const string UI_MANAGER = "UIManager";
+            public const string AUDIO_MANAGER = "AudioManager";
         }
     }
 }
