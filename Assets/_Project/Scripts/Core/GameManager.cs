@@ -7,12 +7,13 @@ using TicTacToe.AI;
 using TicTacToe.Game.Enums;
 using TicTacToe.Game.Models;
 using TicTacToe.Game.Presenters;
+using TicTacToe.Save;
 using TicTacToe.Utils;
 
 namespace TicTacToe.Core
 {
     /// <summary>
-    /// Главный менеджер игры (Singleton).
+    /// Центральный контроллер игры (Singleton).
     /// Управляет состояниями игры, игровым циклом и координирует все подсистемы.
     /// </summary>
     public class GameManager : Singleton<GameManager>
@@ -98,17 +99,40 @@ namespace TicTacToe.Core
         /// <summary>
         /// Устанавливает Presenter для связи с UI.
         /// </summary>
-        /// <param name="presenter">GamePresenter</param>
         public void SetPresenter(GamePresenter presenter)
         {
             _presenter = presenter;
         }
         
         /// <summary>
+        /// Устанавливает состояние игры напрямую (для UI).
+        /// </summary>
+        public void SetState(State newState)
+        {
+            ChangeState(newState);
+        }
+        
+        /// <summary>
+        /// Переход к выбору сложности.
+        /// </summary>
+        public void GoToDifficultySelect()
+        {
+            ChangeState(State.DifficultySelect);
+        }
+        
+        /// <summary>
+        /// Переход к сетевому лобби.
+        /// </summary>
+        public void GoToLobby()
+        {
+            ChangeState(State.Lobby);
+        }
+        
+        /// <summary>
         /// Начинает игру против ИИ.
         /// </summary>
         /// <param name="difficulty">Уровень сложности</param>
-        /// <param name="playerIsX">Игрок играет за X (первый ход)</param>
+        /// <param name="playerIsX">Играет ли игрок за X</param>
         public void StartGameVsAI(AIDifficulty difficulty, bool playerIsX = true)
         {
             CurrentMode = GameMode.VsAI;
@@ -118,9 +142,9 @@ namespace TicTacToe.Core
             // Создаём ИИ через фабрику
             _aiPlayer = AIFactory.Create(difficulty);
             
-            StartGameInternal();
+            StartNewGame();
             
-            // Если ИИ ходит первым
+            // Если ИИ ходит первым (игрок за O)
             if (!playerIsX)
             {
                 HandleAITurn();
@@ -128,91 +152,84 @@ namespace TicTacToe.Core
         }
         
         /// <summary>
-        /// Начинает локальный мультиплеер (два игрока на одном устройстве).
+        /// Начинает локальную игру для двух игроков.
         /// </summary>
         public void StartLocalMultiplayer()
         {
             CurrentMode = GameMode.LocalMultiplayer;
             _aiPlayer = null;
+            PlayerIsX = true;
             
-            StartGameInternal();
+            StartNewGame();
         }
         
         /// <summary>
-        /// Начинает сетевую игру (заглушка — будет реализовано в Фазе 8).
+        /// Начинает сетевую игру.
         /// </summary>
-        public void StartNetworkGame()
+        /// <param name="isHost">Является ли игрок хостом</param>
+        public void StartNetworkMultiplayer(bool isHost = true)
         {
             CurrentMode = GameMode.NetworkMultiplayer;
             _aiPlayer = null;
+            PlayerIsX = isHost;
             
-            // TODO: Фаза 8 — Network Multiplayer
-            ChangeState(State.Lobby);
+            // TODO: Фаза 8 — Network implementation
+            ChangeState(State.WaitingForPlayer);
         }
         
         /// <summary>
-        /// Переводит игру в состояние выбора сложности.
-        /// </summary>
-        public void ShowDifficultySelect()
-        {
-            ChangeState(State.DifficultySelect);
-        }
-        
-        /// <summary>
-        /// Совершает ход в указанную ячейку.
+        /// Делает ход в указанную ячейку.
         /// </summary>
         /// <param name="cellIndex">Индекс ячейки (0-8)</param>
-        /// <returns>true если ход успешен</returns>
+        /// <returns>True, если ход успешен</returns>
         public bool MakeMove(int cellIndex)
         {
+            // Проверки
             if (CurrentState != State.Playing)
             {
+                Debug.LogWarning("[GameManager] Cannot make move: game not in Playing state");
                 return false;
             }
             
-            // Блокируем ход во время "думания" ИИ
             if (IsAIThinking)
             {
+                Debug.LogWarning("[GameManager] Cannot make move: AI is thinking");
                 return false;
             }
             
-            // В режиме VsAI игрок может ходить только своим символом
-            if (CurrentMode == GameMode.VsAI)
+            // В режиме VsAI проверяем, что сейчас ход игрока
+            if (CurrentMode == GameMode.VsAI && IsAITurn())
             {
-                CellState playerSymbol = PlayerIsX ? CellState.X : CellState.O;
-                if (CurrentTurn != playerSymbol)
-                {
-                    return false;
-                }
+                Debug.LogWarning("[GameManager] Cannot make move: it's AI's turn");
+                return false;
             }
             
             return ProcessMove(cellIndex);
         }
         
         /// <summary>
-        /// Перезапускает игру с теми же настройками.
+        /// Перезапускает текущую игру.
         /// </summary>
         public void Restart()
         {
             StopAIThinking();
             
-            switch (CurrentMode)
+            if (CurrentMode == GameMode.VsAI)
             {
-                case GameMode.VsAI:
-                    StartGameVsAI(CurrentDifficulty, PlayerIsX);
-                    break;
-                case GameMode.LocalMultiplayer:
-                    StartLocalMultiplayer();
-                    break;
-                case GameMode.NetworkMultiplayer:
-                    // TODO: Фаза 8
-                    StartLocalMultiplayer();
-                    break;
+                StartGameVsAI(CurrentDifficulty, PlayerIsX);
+            }
+            else if (CurrentMode == GameMode.LocalMultiplayer)
+            {
+                StartLocalMultiplayer();
+            }
+            else
+            {
+                StartNewGame();
             }
         }
         
         /// <summary>
-        /// Выходит в главное меню.
+        /// Выход в главное меню.
         /// </summary>
         public void QuitToMenu()
         {
@@ -247,34 +264,36 @@ namespace TicTacToe.Core
         // ========== Приватные методы ==========
         
         /// <summary>
-        /// Внутренняя логика начала игры.
+        /// Начинает новую игру (общая логика).
         /// </summary>
-        private void StartGameInternal()
+        private void StartNewGame()
         {
             Board.Reset();
             CurrentTurn = CellState.X;
             LastGameResult = GameResult.None;
-            IsAIThinking = false;
             
             ChangeState(State.Playing);
+            
             OnTurnChanged?.Invoke(CurrentTurn);
         }
         
         /// <summary>
         /// Обрабатывает ход.
         /// </summary>
-        /// <param name="cellIndex">Индекс ячейки</param>
-        /// <returns>true если ход успешен</returns>
         private bool ProcessMove(int cellIndex)
         {
-            if (!Board.MakeMove(cellIndex, CurrentTurn))
+            // Делаем ход в модели
+            bool success = Board.MakeMove(cellIndex, CurrentTurn);
+            
+            if (!success)
             {
                 return false;
             }
             
+            // Уведомляем о сделанном ходе
             OnMoveMade?.Invoke(cellIndex, CurrentTurn);
             
-            // Проверяем окончание игры
+            // Проверяем результат
             GameResult result = Board.GetGameResult();
             
             if (result != GameResult.None)
@@ -283,10 +302,10 @@ namespace TicTacToe.Core
                 return true;
             }
             
-            // Переключаем ход
+            // Меняем ход
             SwitchTurn();
             
-            // Если теперь ход ИИ
+            // Если следующий ход ИИ
             if (CurrentMode == GameMode.VsAI && IsAITurn())
             {
                 HandleAITurn();
@@ -305,16 +324,16 @@ namespace TicTacToe.Core
         }
         
         /// <summary>
-        /// Проверяет, ход ли сейчас ИИ.
+        /// Проверяет, является ли текущий ход ходом ИИ.
         /// </summary>
-        /// <returns>true если ход ИИ</returns>
         private bool IsAITurn()
         {
-            if (_aiPlayer == null)
+            if (CurrentMode != GameMode.VsAI || _aiPlayer == null)
             {
                 return false;
             }
             
+            // Если игрок за X, то ИИ за O (и наоборот)
             CellState aiSymbol = PlayerIsX ? CellState.O : CellState.X;
             return CurrentTurn == aiSymbol;
         }
@@ -392,11 +411,11 @@ namespace TicTacToe.Core
             
             _matchesPlayed++;
             
-            // TODO: Фаза 5 — обновить статистику в SaveSystem
-            // SaveSystem.Instance?.UpdateStatistics(CurrentMode, result);
+            // === ИНТЕГРАЦИЯ С SAVE SYSTEM ===
+            RecordGameResult(result);
             
             // TODO: Фаза 7 — показать interstitial рекламу
-            // if (_matchesPlayed >= MATCHES_BEFORE_INTERSTITIAL)
+            // if (ShouldShowInterstitial())
             // {
             //     _matchesPlayed = 0;
             //     AdsManager.Instance?.ShowInterstitial();
@@ -406,9 +425,96 @@ namespace TicTacToe.Core
         }
         
         /// <summary>
+        /// Записывает результат игры в SaveSystem.
+        /// </summary>
+        /// <param name="result">Результат игры</param>
+        private void RecordGameResult(GameResult result)
+        {
+            var saveSystem = SaveSystem.Instance;
+            if (saveSystem?.Data == null)
+            {
+                Debug.LogWarning("[GameManager] SaveSystem not available, result not saved");
+                return;
+            }
+            
+            switch (CurrentMode)
+            {
+                case GameMode.VsAI:
+                    RecordAIGameResult(result);
+                    break;
+                    
+                case GameMode.LocalMultiplayer:
+                    RecordLocalMultiplayerResult(result);
+                    break;
+                    
+                case GameMode.NetworkMultiplayer:
+                    RecordNetworkMultiplayerResult(result);
+                    break;
+            }
+            
+            // Сохраняем немедленно после игры
+            saveSystem.ForceSave();
+            
+            Debug.Log($"[GameManager] Game result recorded: {CurrentMode} - {result}");
+        }
+        
+        /// <summary>
+        /// Записывает результат игры против ИИ.
+        /// </summary>
+        private void RecordAIGameResult(GameResult result)
+        {
+            // Определяем, выиграл ли игрок
+            bool playerWon = (result == GameResult.XWins && PlayerIsX) ||
+                            (result == GameResult.OWins && !PlayerIsX);
+            bool isDraw = result == GameResult.Draw;
+            
+            // Индекс сложности: Easy=0, Medium=1, Hard=2
+            int difficultyIndex = (int)CurrentDifficulty;
+            
+            SaveSystem.Instance.RecordAIGameResult(difficultyIndex, playerWon, isDraw);
+        }
+        
+        /// <summary>
+        /// Записывает результат локальной мультиплеерной игры.
+        /// </summary>
+        private void RecordLocalMultiplayerResult(GameResult result)
+        {
+            bool playerXWon = result == GameResult.XWins;
+            bool isDraw = result == GameResult.Draw;
+            
+            SaveSystem.Instance.RecordLocalMultiplayerResult(playerXWon, isDraw);
+        }
+        
+        /// <summary>
+        /// Записывает результат сетевой мультиплеерной игры.
+        /// </summary>
+        private void RecordNetworkMultiplayerResult(GameResult result)
+        {
+            // Определяем, выиграл ли игрок (зависит от того, за кого он играет)
+            bool playerWon = (result == GameResult.XWins && PlayerIsX) ||
+                            (result == GameResult.OWins && !PlayerIsX);
+            bool isDraw = result == GameResult.Draw;
+            
+            SaveSystem.Instance.RecordNetworkMultiplayerResult(playerWon, isDraw);
+        }
+        
+        /// <summary>
+        /// Проверяет, нужно ли показать interstitial рекламу.
+        /// </summary>
+        private bool ShouldShowInterstitial()
+        {
+            // Проверяем, куплено ли отключение рекламы
+            if (SaveSystem.Instance?.IsAdsRemoved() == true)
+            {
+                return false;
+            }
+            
+            return _matchesPlayed >= MATCHES_BEFORE_INTERSTITIAL;
+        }
+        
+        /// <summary>
         /// Меняет состояние игры.
         /// </summary>
-        /// <param name="newState">Новое состояние</param>
         private void ChangeState(State newState)
         {
             if (CurrentState == newState)
@@ -416,10 +522,10 @@ namespace TicTacToe.Core
                 return;
             }
             
-            State previousState = CurrentState;
+            State oldState = CurrentState;
             CurrentState = newState;
             
-            Debug.Log($"[GameManager] State: {previousState} → {newState}");
+            Debug.Log($"[GameManager] State: {oldState} → {newState}");
             
             OnStateChanged?.Invoke(newState);
         }
